@@ -1,17 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const DEV_COOKIE_NAME = "dev_admin";
-
-function devAdminEnabled() {
-  return process.env.NODE_ENV !== "production" && process.env.DEV_ADMIN_AUTH === "1";
-}
-
 function isPublicPath(pathname: string) {
   return (
     pathname === "/" ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/signup") ||
+    pathname.startsWith("/auth/callback") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/reset-password") ||
     pathname.startsWith("/api") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon")
@@ -20,8 +17,6 @@ function isPublicPath(pathname: string) {
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next({ request: { headers: request.headers } });
-
-  const devAdmin = devAdminEnabled() && request.cookies.get(DEV_COOKIE_NAME)?.value === "1";
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -44,7 +39,7 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  if (!isPublicPath(pathname) && !user && !devAdmin) {
+  if (!isPublicPath(pathname) && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
@@ -52,7 +47,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // If user is logged in and hits login/signup, bounce to dashboard.
-  if ((user || devAdmin) && (pathname.startsWith("/login") || pathname.startsWith("/signup") || pathname === "/")) {
+  if (user && (pathname.startsWith("/login") || pathname.startsWith("/signup") || pathname === "/")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     url.search = "";

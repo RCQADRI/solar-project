@@ -2,11 +2,12 @@ import LoginForm from "./login-form";
 
 export const dynamic = "force-dynamic";
 
-export default function LoginPage({
+export default async function LoginPage({
   searchParams,
 }: {
-  searchParams?: { next?: string };
+  searchParams?: Promise<{ next?: string }>;
 }) {
-  const nextPath = searchParams?.next ?? "/dashboard";
+  const sp = (await searchParams) ?? {};
+  const nextPath = sp.next ?? "/dashboard";
   return <LoginForm nextPath={nextPath} />;
 }

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0ea5e9"/>
+      <stop offset="1" stop-color="#22c55e"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="52" height="52" rx="14" fill="#0b1220"/>
+  <!-- Sun -->
+  <circle cx="40" cy="20" r="6" fill="url(#g)"/>
+  <g stroke="url(#g)" stroke-width="3" stroke-linecap="round" opacity="0.9">
+    <line x1="40" y1="8" x2="40" y2="5"/>
+    <line x1="40" y1="35" x2="40" y2="38"/>
+    <line x1="28" y1="20" x2="25" y2="20"/>
+    <line x1="52" y1="20" x2="55" y2="20"/>
+  </g>
+  <!-- Panel -->
+  <rect x="14" y="28" width="36" height="22" rx="6" fill="#0f172a" stroke="#334155" stroke-width="2"/>
+  <g stroke="#334155" stroke-width="2" opacity="0.9">
+    <line x1="22" y1="30" x2="22" y2="48"/>
+    <line x1="30" y1="30" x2="30" y2="48"/>
+    <line x1="38" y1="30" x2="38" y2="48"/>
+    <line x1="46" y1="30" x2="46" y2="48"/>
+    <line x1="16" y1="36" x2="48" y2="36"/>
+    <line x1="16" y1="42" x2="48" y2="42"/>
+  </g>
+  <path d="M16 48 L48 30" stroke="url(#g)" stroke-width="2.5" opacity="0.6"/>
+</svg>

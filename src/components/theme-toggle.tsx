@@ -14,6 +14,11 @@ import {
 export function ThemeToggle() {
   const { setTheme } = useTheme();
 
+  // Prevent hydration mismatches with Radix ids by only rendering after mount.
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

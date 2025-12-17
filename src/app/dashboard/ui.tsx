@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import {
+  Area,
   CartesianGrid,
   Legend,
   Line,
@@ -15,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { CreditFooter } from "@/components/credit-footer";
 import {
   Select,
   SelectContent,
@@ -47,12 +49,20 @@ function formatTimeLabelSeconds(ts: string) {
 
 function MetricTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
+
+  // When we render both an Area (fill) and a Line for the same dataKey (e.g. `power`),
+  // Recharts can provide duplicate payload entries. Dedupe so UI stays clean.
+  const uniquePayload = (payload as any[]).filter((p, idx, arr) => {
+    const key = String(p?.dataKey ?? "");
+    return arr.findIndex((x) => String(x?.dataKey ?? "") === key) === idx;
+  });
+
   return (
-    <div className="rounded-lg border border-border bg-popover px-3 py-2 text-sm shadow">
+    <div className="rounded-xl border border-border bg-popover/95 px-3 py-2 text-sm shadow-md backdrop-blur">
       <div className="pb-1 font-medium text-popover-foreground">{label}</div>
       <div className="space-y-0.5">
-        {payload.map((p: any) => (
-          <div key={p.dataKey} className="flex items-center justify-between gap-4">
+        {uniquePayload.map((p: any, i: number) => (
+          <div key={`${p.dataKey ?? "k"}-${p.name ?? "n"}-${i}`} className="flex items-center justify-between gap-4">
             <span className="text-muted-foreground" style={{ color: p.color }}>
               {p.name}
             </span>
@@ -68,6 +78,8 @@ function MetricTooltip({ active, payload, label }: any) {
 }
 
 export default function DashboardClient({ email }: { email: string }) {
+  const [mounted, setMounted] = React.useState(false);
+
   const [device, setDevice] = React.useState("demo-1");
   const [latest, setLatest] = React.useState<Point | null>(null);
   const [hourly, setHourly] = React.useState<Point[]>([]);
@@ -171,6 +183,7 @@ export default function DashboardClient({ email }: { email: string }) {
   }, []);
 
   React.useEffect(() => {
+    setMounted(true);
     void load();
     const id = window.setInterval(() => void load(), 10_000);
     return () => window.clearInterval(id);
@@ -189,6 +202,17 @@ export default function DashboardClient({ email }: { email: string }) {
     return (hourly ?? []).map((p) => ({ ...p, label: formatTimeLabel(p.ts) }));
   }, [hourly]);
 
+  const colors = React.useMemo(
+    () => ({
+      voltage: "var(--chart-2)",
+      current: "var(--chart-3)",
+      power: "var(--chart-4)",
+      grid: "var(--border)",
+      muted: "var(--muted-foreground)",
+    }),
+    []
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/30 p-4 md:p-8">
       <div className="mx-auto max-w-6xl space-y-6 animate-in fade-in-0 slide-in-from-bottom-2 duration-500 motion-reduce:animate-none">
@@ -200,14 +224,18 @@ export default function DashboardClient({ email }: { email: string }) {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Device</span>
-              <Select value={device} onValueChange={setDevice}>
-                <SelectTrigger className="w-[260px] transition-colors">
-                  <SelectValue placeholder="Select device" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="demo-1">Demo Device 1 (demo-site)</SelectItem>
-                </SelectContent>
-              </Select>
+              {!mounted ? (
+                <div className="h-9 w-[260px] rounded-md border border-border bg-card/40" />
+              ) : (
+                <Select value={device} onValueChange={setDevice}>
+                  <SelectTrigger className="w-[260px] transition-colors">
+                    <SelectValue placeholder="Select device" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="demo-1">Demo Device 1 (demo-site)</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <ThemeToggle />
@@ -230,7 +258,7 @@ export default function DashboardClient({ email }: { email: string }) {
         ) : null}
 
         <div className="grid gap-4 md:grid-cols-3">
-          <Card className="bg-card/60 backdrop-blur">
+          <Card className="bg-card/60 backdrop-blur animate-in fade-in-0 slide-in-from-bottom-2 duration-500 delay-75 motion-reduce:animate-none">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Voltage</CardTitle>
             </CardHeader>
@@ -240,7 +268,7 @@ export default function DashboardClient({ email }: { email: string }) {
               </div>
             </CardContent>
           </Card>
-          <Card className="bg-card/60 backdrop-blur">
+          <Card className="bg-card/60 backdrop-blur animate-in fade-in-0 slide-in-from-bottom-2 duration-500 delay-150 motion-reduce:animate-none">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Current</CardTitle>
             </CardHeader>
@@ -250,7 +278,7 @@ export default function DashboardClient({ email }: { email: string }) {
               </div>
             </CardContent>
           </Card>
-          <Card className="bg-card/60 backdrop-blur">
+          <Card className="bg-card/60 backdrop-blur animate-in fade-in-0 slide-in-from-bottom-2 duration-500 delay-200 motion-reduce:animate-none">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Power</CardTitle>
             </CardHeader>
@@ -263,41 +291,123 @@ export default function DashboardClient({ email }: { email: string }) {
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="bg-card/60 backdrop-blur">
+          <Card className="bg-card/60 backdrop-blur animate-in fade-in-0 slide-in-from-bottom-2 duration-500 delay-300 motion-reduce:animate-none">
             <CardHeader>
               <CardTitle>Live (last ~10 minutes @ 10s)</CardTitle>
             </CardHeader>
             <CardContent className="h-[360px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={liveData} margin={{ left: 8, right: 8, top: 12, bottom: 0 }}>
-                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="4 4" />
-                  <XAxis dataKey="label" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                  <Tooltip content={<MetricTooltip />} />
-                  <Legend wrapperStyle={{ color: "hsl(var(--muted-foreground))" }} />
-                  <Line name="Voltage" type="monotone" dataKey="voltage" stroke="hsl(var(--chart-2))" dot={false} strokeWidth={2} />
-                  <Line name="Current" type="monotone" dataKey="current" stroke="hsl(var(--chart-3))" dot={false} strokeWidth={2} />
-                  <Line name="Power" type="monotone" dataKey="power" stroke="hsl(var(--chart-4))" dot={false} strokeWidth={2} />
+                  <defs>
+                    <linearGradient id="powerFillLive" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={colors.power} stopOpacity={0.22} />
+                      <stop offset="90%" stopColor={colors.power} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke={colors.grid} strokeOpacity={0.55} strokeDasharray="4 6" />
+                  <XAxis dataKey="label" tick={{ fill: colors.muted, fontSize: 12 }} axisLine={{ stroke: colors.grid, opacity: 0.6 }} tickLine={false} />
+                  <YAxis tick={{ fill: colors.muted, fontSize: 12 }} axisLine={{ stroke: colors.grid, opacity: 0.6 }} tickLine={false} />
+                  <Tooltip
+                    content={<MetricTooltip />}
+                    cursor={{ stroke: colors.grid, strokeOpacity: 0.6, strokeDasharray: "3 6" }}
+                  />
+                  <Legend wrapperStyle={{ color: colors.muted }} />
+                  <Area
+                    type="monotone"
+                    dataKey="power"
+                    stroke="none"
+                    fill="url(#powerFillLive)"
+                    isAnimationActive={!loading}
+                    legendType="none"
+                  />
+                  <Line
+                    name="Voltage"
+                    type="monotone"
+                    dataKey="voltage"
+                    stroke={colors.voltage}
+                    dot={false}
+                    strokeWidth={2.5}
+                    activeDot={{ r: 4, stroke: colors.voltage, strokeWidth: 2, fill: "var(--background)" }}
+                  />
+                  <Line
+                    name="Current"
+                    type="monotone"
+                    dataKey="current"
+                    stroke={colors.current}
+                    dot={false}
+                    strokeWidth={2.5}
+                    activeDot={{ r: 4, stroke: colors.current, strokeWidth: 2, fill: "var(--background)" }}
+                  />
+                  <Line
+                    name="Power"
+                    type="monotone"
+                    dataKey="power"
+                    stroke={colors.power}
+                    dot={false}
+                    strokeWidth={2.5}
+                    activeDot={{ r: 4, stroke: colors.power, strokeWidth: 2, fill: "var(--background)" }}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
 
-          <Card className="bg-card/60 backdrop-blur">
+          <Card className="bg-card/60 backdrop-blur animate-in fade-in-0 slide-in-from-bottom-2 duration-500 delay-400 motion-reduce:animate-none">
             <CardHeader>
               <CardTitle>Hourly (last 24h)</CardTitle>
             </CardHeader>
             <CardContent className="h-[360px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={hourlyData} margin={{ left: 8, right: 8, top: 12, bottom: 0 }}>
-                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="4 4" />
-                  <XAxis dataKey="label" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                  <Tooltip content={<MetricTooltip />} />
-                  <Legend wrapperStyle={{ color: "hsl(var(--muted-foreground))" }} />
-                  <Line name="Voltage" type="monotone" dataKey="voltage" stroke="hsl(var(--chart-2))" dot={false} strokeWidth={2} />
-                  <Line name="Current" type="monotone" dataKey="current" stroke="hsl(var(--chart-3))" dot={false} strokeWidth={2} />
-                  <Line name="Power" type="monotone" dataKey="power" stroke="hsl(var(--chart-4))" dot={false} strokeWidth={2} />
+                  <defs>
+                    <linearGradient id="powerFillHourly" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={colors.power} stopOpacity={0.18} />
+                      <stop offset="90%" stopColor={colors.power} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke={colors.grid} strokeOpacity={0.55} strokeDasharray="4 6" />
+                  <XAxis dataKey="label" tick={{ fill: colors.muted, fontSize: 12 }} axisLine={{ stroke: colors.grid, opacity: 0.6 }} tickLine={false} />
+                  <YAxis tick={{ fill: colors.muted, fontSize: 12 }} axisLine={{ stroke: colors.grid, opacity: 0.6 }} tickLine={false} />
+                  <Tooltip
+                    content={<MetricTooltip />}
+                    cursor={{ stroke: colors.grid, strokeOpacity: 0.6, strokeDasharray: "3 6" }}
+                  />
+                  <Legend wrapperStyle={{ color: colors.muted }} />
+                  <Area
+                    type="monotone"
+                    dataKey="power"
+                    stroke="none"
+                    fill="url(#powerFillHourly)"
+                    isAnimationActive={!loading}
+                    legendType="none"
+                  />
+                  <Line
+                    name="Voltage"
+                    type="monotone"
+                    dataKey="voltage"
+                    stroke={colors.voltage}
+                    dot={false}
+                    strokeWidth={2.5}
+                    activeDot={{ r: 4, stroke: colors.voltage, strokeWidth: 2, fill: "var(--background)" }}
+                  />
+                  <Line
+                    name="Current"
+                    type="monotone"
+                    dataKey="current"
+                    stroke={colors.current}
+                    dot={false}
+                    strokeWidth={2.5}
+                    activeDot={{ r: 4, stroke: colors.current, strokeWidth: 2, fill: "var(--background)" }}
+                  />
+                  <Line
+                    name="Power"
+                    type="monotone"
+                    dataKey="power"
+                    stroke={colors.power}
+                    dot={false}
+                    strokeWidth={2.5}
+                    activeDot={{ r: 4, stroke: colors.power, strokeWidth: 2, fill: "var(--background)" }}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
@@ -318,6 +428,8 @@ export default function DashboardClient({ email }: { email: string }) {
             Seed Demo Data
           </Button>
         </div>
+
+        <CreditFooter className="pt-6" />
       </div>
     </div>
   );

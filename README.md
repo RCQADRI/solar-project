@@ -12,6 +12,13 @@ Next.js web app for solar monitoring with:
 - Enable Email/Password auth in Supabase Auth settings
 - Copy your project URL + anon key
 
+Important (deploy/Vercel):
+- In Supabase Dashboard → **Authentication** → **URL Configuration**
+	- Set **Site URL** to your deployed domain (example: `https://your-app.vercel.app`)
+	- Add **Redirect URLs**:
+		- `https://your-app.vercel.app/auth/callback`
+		- (optional for local dev) `http://localhost:3000/auth/callback`
+
 2) Create `.env.local`
 
 ```bash
@@ -21,6 +28,7 @@ cp .env.example .env.local
 Fill:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_SITE_URL` (set this to your deployed domain on Vercel)
 - `MONGODB_URI` and `MONGODB_DB`
 
 3) Run MongoDB (example)
