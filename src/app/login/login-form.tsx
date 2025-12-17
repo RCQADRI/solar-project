@@ -20,6 +20,26 @@ import { CreditFooter } from "@/components/credit-footer";
 export default function LoginForm({ nextPath }: { nextPath: string }) {
 	const router = useRouter();
 
+	React.useEffect(() => {
+		// Supabase password-recovery flows can sometimes land on the Site URL
+		// (often /login) with recovery tokens or errors in the URL hash.
+		// If that happens, forward the user to the reset-password screen.
+		if (typeof window === "undefined") return;
+		const { hash, search } = window.location;
+		if (!hash) return;
+		const hashParams = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+		const type = hashParams.get("type");
+		const isRecovery =
+			type === "recovery" || hashParams.has("access_token") || hashParams.has("refresh_token");
+		const isRecoveryError =
+			hashParams.get("error_code") === "otp_expired" ||
+			hashParams.get("error") === "access_denied" ||
+			hashParams.get("error") === "invalid_request";
+		if (isRecovery || isRecoveryError) {
+			window.location.replace(`/reset-password${search}${hash}`);
+		}
+	}, []);
+
 	const [email, setEmail] = React.useState("");
 	const [password, setPassword] = React.useState("");
 	const [loading, setLoading] = React.useState(false);
