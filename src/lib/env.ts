@@ -8,6 +8,7 @@ const PublicEnvSchema = z.object({
 const ServerEnvSchema = PublicEnvSchema.extend({
   MONGODB_URI: z.string().min(1).optional(),
   MONGODB_DB: z.string().min(1).optional(),
+  INGEST_API_KEY: z.string().min(16).optional(), // Secret key for hardware ingestion
 });
 
 export type PublicEnv = {
@@ -18,6 +19,7 @@ export type PublicEnv = {
 export type ServerEnv = PublicEnv & {
   MONGODB_URI: string;
   MONGODB_DB: string;
+  INGEST_API_KEY?: string; // Optional: for hardware data ingestion
 };
 
 let cachedPublicEnv: PublicEnv | null = null;
@@ -59,6 +61,7 @@ export function getServerEnv(): ServerEnv {
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     MONGODB_URI: process.env.MONGODB_URI,
     MONGODB_DB: process.env.MONGODB_DB,
+    INGEST_API_KEY: process.env.INGEST_API_KEY,
   });
 
   if (!parsed.success) {
@@ -79,6 +82,7 @@ export function getServerEnv(): ServerEnv {
     NEXT_PUBLIC_SUPABASE_ANON_KEY: v.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     MONGODB_URI: v.MONGODB_URI,
     MONGODB_DB: v.MONGODB_DB ?? "solar",
+    INGEST_API_KEY: v.INGEST_API_KEY,
   };
   return cachedServerEnv;
 }

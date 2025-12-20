@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDb } from "@/lib/mongodb";
 import { COLLECTION_TELEMETRY } from "@/lib/telemetry";
-import { getOrCreateDemoTelemetry } from "@/lib/demo-telemetry-store";
 
 export async function GET() {
   try {
@@ -12,29 +11,27 @@ export async function GET() {
     } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    try {
-      const db = await getDb();
-      const doc = await db.collection(COLLECTION_TELEMETRY).findOne({}, { sort: { ts: -1 } });
-      if (!doc) return NextResponse.json({ error: "No telemetry" }, { status: 404 });
-
-      return NextResponse.json({
-        ts: doc.ts,
-        voltage: doc.voltage,
-        current: doc.current,
-        power: doc.power,
-        source: "mongodb",
-      });
-    } catch {
-      const points = getOrCreateDemoTelemetry();
-      const last = points[points.length - 1];
-      return NextResponse.json({
-        ts: last.ts,
-        voltage: last.voltage,
-        current: last.current,
-        power: last.power,
-        source: "demo",
-      });
+    const db = await getDb();
+    const doc = await db.collection(COLLECTION_TELEMETRY).findOne({}, { sort: { ts: -1 } });
+    
+    if (!doc) {
+      return NextResponse.json({ 
+        error: "No telemetry data",
+        message: "No data available. Connect hardware or use 'Seed Demo Data' button."
+      }, { status: 404 });
     }
+
+    // Determine source based on document properties
+    const source = doc.source === "hardware" ? "hardware" : "mongodb";
+    
+    return NextResponse.json({
+      ts: doc.ts,
+      voltage: doc.voltage,
+      current: doc.current,
+      power: doc.power,
+      deviceId: doc.deviceId,
+      source,
+    });
   } catch (e: any) {
     return NextResponse.json(
       {
