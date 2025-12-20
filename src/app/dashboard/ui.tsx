@@ -78,9 +78,21 @@ function MetricTooltip({ active, payload, label }: any) {
 }
 
 // Live pulse indicator component
-function LiveIndicator({ isLive, lastUpdate }: { isLive: boolean; lastUpdate: Date | null }) {
+function LiveIndicator({ isLive, lastUpdate, isDemo }: { isLive: boolean; lastUpdate: Date | null; isDemo?: boolean }) {
   const timeSince = lastUpdate ? Math.floor((Date.now() - lastUpdate.getTime()) / 1000) : null;
   const isStale = timeSince !== null && timeSince > 30; // Consider stale if > 30 seconds
+  
+  // Demo device always shows as Offline (grey dot, no pulse)
+  if (isDemo) {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="relative flex items-center">
+          <span className="flex h-2.5 w-2.5 rounded-full bg-gray-400" />
+        </div>
+        <span className="text-xs text-muted-foreground">Offline</span>
+      </div>
+    );
+  }
   
   return (
     <div className="flex items-center gap-2">
@@ -99,12 +111,24 @@ function LiveIndicator({ isLive, lastUpdate }: { isLive: boolean; lastUpdate: Da
 }
 
 // Data source badge component
-function SourceBadge({ source }: { source?: string }) {
+function SourceBadge({ source, isDemo }: { source?: string; isDemo?: boolean }) {
   const config = {
     hardware: { label: 'Hardware', color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
     mongodb: { label: 'Database', color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20' },
     demo: { label: 'Demo', color: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' },
+    virtual: { label: 'Virtual', color: 'bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/20' },
   };
+  
+  // Demo device always shows as Virtual
+  if (isDemo) {
+    const { label, color } = config.virtual;
+    return (
+      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${color}`}>
+        {label}
+      </span>
+    );
+  }
+  
   const { label, color } = config[source as keyof typeof config] ?? config.demo;
   
   return (
@@ -125,8 +149,12 @@ type DeviceInfo = {
 };
 
 // Device status indicator with animated pulse for online devices
-function DeviceStatusDot({ status }: { status: "online" | "offline" }) {
-  if (status === "online") {
+// Demo-Device always shows grey dot (never online)
+function DeviceStatusDot({ status, deviceId }: { status: "online" | "offline"; deviceId?: string }) {
+  // Demo device is always shown as offline (grey)
+  const isDemo = deviceId === "Demo-Device";
+  
+  if (status === "online" && !isDemo) {
     return (
       <span className="relative flex h-2 w-2">
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
@@ -318,12 +346,13 @@ export default function DashboardClient({ email }: { email: string }) {
                     {devices.map((d) => (
                       <SelectItem key={d.deviceId} value={d.deviceId}>
                         <span className="flex items-center gap-2">
-                          <DeviceStatusDot status={d.status} />
+                          <DeviceStatusDot status={d.status} deviceId={d.deviceId} />
                           <span className="whitespace-nowrap">{d.deviceId}</span>
-                          {d.status === "online" && d.secondsAgo !== null && (
+                          {d.deviceId === "Demo-Device" ? (
+                            <span className="text-xs text-muted-foreground">(virtual)</span>
+                          ) : d.status === "online" && d.secondsAgo !== null ? (
                             <span className="text-xs text-muted-foreground">({d.secondsAgo}s ago)</span>
-                          )}
-                          {d.status === "offline" && (
+                          ) : (
                             <span className="text-xs text-muted-foreground">(offline)</span>
                           )}
                         </span>
@@ -334,11 +363,26 @@ export default function DashboardClient({ email }: { email: string }) {
               )}
             </div>
             <div className="flex items-center gap-3">
-              <LiveIndicator isLive={isLive && !noData} lastUpdate={lastUpdate} />
-              <SourceBadge source={dataSource} />
+              <LiveIndicator isLive={isLive && !noData} lastUpdate={lastUpdate} isDemo={selectedDevice === "Demo-Device"} />
+              <SourceBadge source={dataSource} isDemo={selectedDevice === "Demo-Device"} />
             </div>
             <div className="flex items-center gap-2">
               <ThemeToggle />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => void load()}
+                aria-label="Refresh"
+              >
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+              </Button>
               <Button variant="outline" onClick={logout}>
                 Logout
               </Button>
@@ -559,20 +603,6 @@ export default function DashboardClient({ email }: { email: string }) {
           </Card>
         </div>
 
-            <div className="flex gap-2 flex-wrap">
-              <Button onClick={load} variant="outline">
-                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Refresh
-              </Button>
-              <Button variant="secondary" onClick={async () => { await seedDemo(); await loadDevices(); await load(); }}>
-                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                </svg>
-                Seed Demo Data
-              </Button>
-            </div>
           </>
         )}
 
