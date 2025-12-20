@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDb } from "@/lib/mongodb";
 import { COLLECTION_TELEMETRY } from "@/lib/telemetry";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createSupabaseServerClient();
     const {
@@ -11,14 +11,25 @@ export async function GET() {
     } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    // Get deviceId from query params (optional filter)
+    const { searchParams } = new URL(request.url);
+    const deviceIdFilter = searchParams.get("deviceId");
+
     const now = new Date();
     const start = new Date(now);
     start.setMinutes(start.getMinutes() - 10);
 
     const db = await getDb();
+    
+    // Build query - filter by deviceId if provided
+    const query: Record<string, unknown> = { ts: { $gte: start } };
+    if (deviceIdFilter) {
+      query.deviceId = deviceIdFilter;
+    }
+    
     const docs = await db
       .collection(COLLECTION_TELEMETRY)
-      .find({ ts: { $gte: start } }, { sort: { ts: 1 } })
+      .find(query, { sort: { ts: 1 } })
       .limit(1000)
       .toArray();
 
@@ -36,6 +47,7 @@ export async function GET() {
       })),
       source,
       count: docs.length,
+      deviceId: deviceIdFilter,
     });
   } catch (e: any) {
     return NextResponse.json(

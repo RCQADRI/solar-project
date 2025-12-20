@@ -17,6 +17,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CreditFooter } from "@/components/credit-footer";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Point = { ts: string; voltage: number; current: number; power: number };
 
@@ -108,9 +115,15 @@ function SourceBadge({ source }: { source?: string }) {
 }
 
 type LatestData = Point & { source?: string; deviceId?: string };
+type DeviceInfo = { deviceId: string; lastSeen: string | null; source: string; dataPoints: number };
 
 export default function DashboardClient({ email }: { email: string }) {
   const [mounted, setMounted] = React.useState(false);
+
+  // Device selection state
+  const [devices, setDevices] = React.useState<DeviceInfo[]>([]);
+  const [selectedDevice, setSelectedDevice] = React.useState<string>("all");
+  const [loadingDevices, setLoadingDevices] = React.useState(true);
 
   const [latest, setLatest] = React.useState<LatestData | null>(null);
   const [hourly, setHourly] = React.useState<Point[]>([]);
@@ -120,8 +133,23 @@ export default function DashboardClient({ email }: { email: string }) {
   const [lastUpdate, setLastUpdate] = React.useState<Date | null>(null);
   const [isLive, setIsLive] = React.useState(false);
   const [dataSource, setDataSource] = React.useState<string>("mongodb");
-  const [deviceId, setDeviceId] = React.useState<string | null>(null);
   const [noData, setNoData] = React.useState(false);
+
+  // Fetch available devices
+  const loadDevices = React.useCallback(async () => {
+    try {
+      setLoadingDevices(true);
+      const res = await fetch("/api/telemetry/devices", { cache: "no-store" });
+      if (res.ok) {
+        const data = await safeReadJson(res);
+        setDevices(data?.devices ?? []);
+      }
+    } catch {
+      // Silently fail - devices list is optional
+    } finally {
+      setLoadingDevices(false);
+    }
+  }, []);
 
   async function seedDemo() {
     const res = await fetch("/api/seed", { method: "POST" });
@@ -136,10 +164,15 @@ export default function DashboardClient({ email }: { email: string }) {
     setLoading(true);
     setError(null);
     try {
+      // Build query string for device filter
+      const deviceQuery = selectedDevice && selectedDevice !== "all" 
+        ? `?deviceId=${encodeURIComponent(selectedDevice)}` 
+        : "";
+      
       const [latestRes, hourlyRes, liveRes] = await Promise.all([
-        fetch("/api/telemetry/latest", { cache: "no-store" }),
-        fetch("/api/telemetry/hourly", { cache: "no-store" }),
-        fetch("/api/telemetry/live", { cache: "no-store" }),
+        fetch(`/api/telemetry/latest${deviceQuery}`, { cache: "no-store" }),
+        fetch(`/api/telemetry/hourly${deviceQuery}`, { cache: "no-store" }),
+        fetch(`/api/telemetry/live${deviceQuery}`, { cache: "no-store" }),
       ]);
 
       const latestJson = (await safeReadJson(latestRes)) ?? {};
@@ -162,10 +195,9 @@ export default function DashboardClient({ email }: { email: string }) {
 
       setNoData(false);
       
-      // Set source and device info
+      // Set source info
       const source = latestJson.source ?? "mongodb";
       setDataSource(source);
-      setDeviceId(latestJson.deviceId ?? null);
       
       // Set data
       setLatest({ 
@@ -186,15 +218,21 @@ export default function DashboardClient({ email }: { email: string }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedDevice]);
 
   React.useEffect(() => {
     setMounted(true);
+    void loadDevices();
     void load();
     // Polling every 5 seconds for real-time updates
     const id = window.setInterval(() => void load(), 5_000);
-    return () => window.clearInterval(id);
-  }, [load]);
+    // Refresh devices list every 30 seconds
+    const devicesId = window.setInterval(() => void loadDevices(), 30_000);
+    return () => {
+      window.clearInterval(id);
+      window.clearInterval(devicesId);
+    };
+  }, [load, loadDevices]);
 
   // Update live indicator every second
   const [, forceUpdate] = React.useState(0);
@@ -235,15 +273,39 @@ export default function DashboardClient({ email }: { email: string }) {
             <h1 className="text-2xl font-semibold tracking-tight">Solar Monitoring Dashboard</h1>
             <p className="text-sm text-muted-foreground">Logged in as {email}</p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            {/* Device Selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Device:</span>
+              {!mounted || loadingDevices ? (
+                <div className="h-9 w-[200px] rounded-md border border-border bg-card/40 animate-pulse" />
+              ) : (
+                <Select value={selectedDevice} onValueChange={setSelectedDevice}>
+                  <SelectTrigger className="w-[200px] transition-colors">
+                    <SelectValue placeholder="Select device" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      <span className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-purple-500" />
+                        All Devices ({devices.length})
+                      </span>
+                    </SelectItem>
+                    {devices.map((d) => (
+                      <SelectItem key={d.deviceId} value={d.deviceId}>
+                        <span className="flex items-center gap-2">
+                          <span className={`h-2 w-2 rounded-full ${d.source === 'hardware' ? 'bg-blue-500' : 'bg-orange-500'}`} />
+                          {d.deviceId}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
             <div className="flex items-center gap-3">
               <LiveIndicator isLive={isLive && !noData} lastUpdate={lastUpdate} />
               <SourceBadge source={dataSource} />
-              {deviceId && (
-                <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-md">
-                  {deviceId}
-                </span>
-              )}
             </div>
             <div className="flex items-center gap-2">
               <ThemeToggle />
@@ -263,18 +325,27 @@ export default function DashboardClient({ email }: { email: string }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-medium mb-2">No Telemetry Data</h3>
+              <h3 className="text-lg font-medium mb-2">
+                {selectedDevice !== "all" ? `No Data for ${selectedDevice}` : "No Telemetry Data"}
+              </h3>
               <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
-                Connect your ESP32/hardware to start receiving live data, or seed demo data to explore the dashboard.
+                {selectedDevice !== "all" 
+                  ? `No data available for device "${selectedDevice}". Try selecting a different device or "All Devices".`
+                  : "Connect your ESP32/hardware to start receiving live data, or seed demo data to explore the dashboard."}
               </p>
-              <div className="flex gap-3 justify-center">
+              <div className="flex gap-3 justify-center flex-wrap">
+                {selectedDevice !== "all" && (
+                  <Button onClick={() => setSelectedDevice("all")} variant="outline">
+                    View All Devices
+                  </Button>
+                )}
                 <Button onClick={load} variant="outline">
                   <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                   Refresh
                 </Button>
-                <Button onClick={async () => { await seedDemo(); await load(); }}>
+                <Button onClick={async () => { await seedDemo(); await loadDevices(); await load(); }}>
                   <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                   </svg>
@@ -465,7 +536,7 @@ export default function DashboardClient({ email }: { email: string }) {
                 </svg>
                 Refresh
               </Button>
-              <Button variant="secondary" onClick={async () => { await seedDemo(); await load(); }}>
+              <Button variant="secondary" onClick={async () => { await seedDemo(); await loadDevices(); await load(); }}>
                 <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
                 </svg>

@@ -1,15 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDb } from "@/lib/mongodb";
 import { COLLECTION_TELEMETRY } from "@/lib/telemetry";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createSupabaseServerClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    // Get deviceId from query params (optional filter)
+    const { searchParams } = new URL(request.url);
+    const deviceIdFilter = searchParams.get("deviceId");
 
     const now = new Date();
     const start = new Date(now);
@@ -18,13 +22,19 @@ export async function GET() {
     const db = await getDb();
     const col = db.collection(COLLECTION_TELEMETRY);
     
+    // Build match query - filter by deviceId if provided
+    const matchQuery: Record<string, unknown> = { ts: { $gte: start } };
+    if (deviceIdFilter) {
+      matchQuery.deviceId = deviceIdFilter;
+    }
+    
     // Check if we have any hardware data
-    const hardwareCount = await col.countDocuments({ ts: { $gte: start }, source: "hardware" });
+    const hardwareCount = await col.countDocuments({ ...matchQuery, source: "hardware" });
     const source = hardwareCount > 0 ? "hardware" : "mongodb";
     
     const rows = await col
       .aggregate([
-        { $match: { ts: { $gte: start } } },
+        { $match: matchQuery },
         {
           $group: {
             _id: {
@@ -52,7 +62,7 @@ export async function GET() {
       ])
       .toArray();
 
-    return NextResponse.json({ points: rows, source, count: rows.length });
+    return NextResponse.json({ points: rows, source, count: rows.length, deviceId: deviceIdFilter });
   } catch (e: any) {
     return NextResponse.json(
       {
