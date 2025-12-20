@@ -115,7 +115,27 @@ function SourceBadge({ source }: { source?: string }) {
 }
 
 type LatestData = Point & { source?: string; deviceId?: string };
-type DeviceInfo = { deviceId: string; lastSeen: string | null; source: string; dataPoints: number };
+type DeviceInfo = { 
+  deviceId: string; 
+  lastSeen: string | null; 
+  secondsAgo: number | null;
+  source: string; 
+  dataPoints: number;
+  status: "online" | "offline";
+};
+
+// Device status indicator with animated pulse for online devices
+function DeviceStatusDot({ status }: { status: "online" | "offline" }) {
+  if (status === "online") {
+    return (
+      <span className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+      </span>
+    );
+  }
+  return <span className="inline-flex h-2 w-2 rounded-full bg-gray-400" />;
+}
 
 export default function DashboardClient({ email }: { email: string }) {
   const [mounted, setMounted] = React.useState(false);
@@ -124,6 +144,7 @@ export default function DashboardClient({ email }: { email: string }) {
   const [devices, setDevices] = React.useState<DeviceInfo[]>([]);
   const [selectedDevice, setSelectedDevice] = React.useState<string>("all");
   const [loadingDevices, setLoadingDevices] = React.useState(true);
+  const [onlineCount, setOnlineCount] = React.useState(0);
 
   const [latest, setLatest] = React.useState<LatestData | null>(null);
   const [hourly, setHourly] = React.useState<Point[]>([]);
@@ -135,14 +156,14 @@ export default function DashboardClient({ email }: { email: string }) {
   const [dataSource, setDataSource] = React.useState<string>("mongodb");
   const [noData, setNoData] = React.useState(false);
 
-  // Fetch available devices
+  // Fetch available devices with status
   const loadDevices = React.useCallback(async () => {
     try {
-      setLoadingDevices(true);
       const res = await fetch("/api/telemetry/devices", { cache: "no-store" });
       if (res.ok) {
         const data = await safeReadJson(res);
         setDevices(data?.devices ?? []);
+        setOnlineCount(data?.onlineCount ?? 0);
       }
     } catch {
       // Silently fail - devices list is optional
@@ -226,8 +247,8 @@ export default function DashboardClient({ email }: { email: string }) {
     void load();
     // Polling every 5 seconds for real-time updates
     const id = window.setInterval(() => void load(), 5_000);
-    // Refresh devices list every 30 seconds
-    const devicesId = window.setInterval(() => void loadDevices(), 30_000);
+    // Refresh devices list every 15 seconds for live status updates
+    const devicesId = window.setInterval(() => void loadDevices(), 15_000);
     return () => {
       window.clearInterval(id);
       window.clearInterval(devicesId);
@@ -281,21 +302,30 @@ export default function DashboardClient({ email }: { email: string }) {
                 <div className="h-9 w-[200px] rounded-md border border-border bg-card/40 animate-pulse" />
               ) : (
                 <Select value={selectedDevice} onValueChange={setSelectedDevice}>
-                  <SelectTrigger className="w-[200px] transition-colors">
+                  <SelectTrigger className="min-w-[260px] w-auto transition-colors">
                     <SelectValue placeholder="Select device" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="min-w-[260px]">
                     <SelectItem value="all">
                       <span className="flex items-center gap-2">
                         <span className="h-2 w-2 rounded-full bg-purple-500" />
                         All Devices ({devices.length})
+                        {onlineCount > 0 && (
+                          <span className="text-xs text-green-500">({onlineCount} online)</span>
+                        )}
                       </span>
                     </SelectItem>
                     {devices.map((d) => (
                       <SelectItem key={d.deviceId} value={d.deviceId}>
                         <span className="flex items-center gap-2">
-                          <span className={`h-2 w-2 rounded-full ${d.source === 'hardware' ? 'bg-blue-500' : 'bg-orange-500'}`} />
-                          {d.deviceId}
+                          <DeviceStatusDot status={d.status} />
+                          <span className="whitespace-nowrap">{d.deviceId}</span>
+                          {d.status === "online" && d.secondsAgo !== null && (
+                            <span className="text-xs text-muted-foreground">({d.secondsAgo}s ago)</span>
+                          )}
+                          {d.status === "offline" && (
+                            <span className="text-xs text-muted-foreground">(offline)</span>
+                          )}
                         </span>
                       </SelectItem>
                     ))}
